@@ -18,6 +18,14 @@ struct SpeedTestConfig {
     download_bytes: Vec<usize>,
     upload_bytes: Vec<usize>,
     latency_tests: usize,
+    ip_version: IpVersion, // 新增字段
+}
+
+#[derive(Debug, Clone)]
+enum IpVersion {
+    V4,
+    V6,
+    Auto,
 }
 
 impl Default for SpeedTestConfig {
@@ -26,6 +34,7 @@ impl Default for SpeedTestConfig {
             download_bytes: vec![100_000, 1_000_000, 10_000_000, 25_000_000, 100_000_000],
             upload_bytes: vec![1_000, 10_000, 100_000, 1_000_000, 10_000_000, 25_000_000],
             latency_tests: 20,
+            ip_version: IpVersion::Auto, // 默认自动选择
         }
     }
 }
@@ -52,13 +61,29 @@ struct SpeedTest {
 
 impl SpeedTest {
     fn new(config: SpeedTestConfig) -> Self {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap();
+        let mut client_builder = Client::builder()
+            .timeout(Duration::from_secs(30));
+        
+        // 根据配置设置IP版本
+        match config.ip_version {
+            IpVersion::V4 => {
+                client_builder = client_builder.local_address(Some("0.0.0.0".parse().unwrap()));
+            },
+            IpVersion::V6 => {
+                client_builder = client_builder.local_address_v6(Some("::".parse().unwrap()));
+            },
+            IpVersion::Auto => {
+                // 使用默认行为，不特别指定IP版本
+            }
+        }
+        
+        let client = client_builder.build().unwrap();
         
         Self { client, config }
     }
+    
+    // ... 其他方法保持不变
+}
 
     async fn run(&self) -> Result<SpeedTestResults> {
         println!("{}", "Starting Cloudflare Speed Test...".bright_cyan());
@@ -371,6 +396,14 @@ async fn main() -> Result<()> {
                 .help("Output results in JSON format")
                 .action(clap::ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("ip_version")
+                .short('i')
+                .long("ip-version")
+                .value_name("VERSION")
+                .help("IP version to use (4 for IPv4, 6 for IPv6, auto for automatic)")
+                .default_value("auto")
+        )
         .get_matches();
 
     let _count: usize = matches.get_one::<String>("count")
@@ -380,7 +413,22 @@ async fn main() -> Result<()> {
     
     let json_output = matches.get_flag("json");
     
-    let config = SpeedTestConfig::default();
+    // 解析IP版本参数
+    let ip_version_str = matches.get_one::<String>("ip_version").unwrap();
+    let ip_version = match ip_version_str.as_str() {
+        "4" => IpVersion::V4,
+        "6" => IpVersion::V6,
+        "auto" => IpVersion::Auto,
+        _ => {
+            eprintln!("Invalid IP version. Use 4, 6, or auto.");
+            std::process::exit(1);
+        }
+    };
+    
+    let config = SpeedTestConfig {
+        ip_version,
+        ..Default::default()
+    };
     
     let speed_test = SpeedTest::new(config);
     
@@ -399,4 +447,20 @@ async fn main() -> Result<()> {
     }
     
     Ok(())
+}
+
+use std::str::FromStr;
+
+// 在IpVersion枚举上方添加
+impl FromStr for IpVersion {
+    type Err = ();
+    
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "4" => Ok(IpVersion::V4),
+            "6" => Ok(IpVersion::V6),
+            "auto" => Ok(IpVersion::Auto),
+            _ => Err(()),
+        }
+    }
 }
