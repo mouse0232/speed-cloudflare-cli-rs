@@ -274,8 +274,9 @@ impl SpeedTest {
         "Server location:".bright_white(),
         results.server_location.bright_green()
     );
-    // 只显示部分IP信息
-    let partial_ip = if results.your_ip.contains('.') {
+    
+    // 修复 IP 隐藏显示逻辑
+    let masked_ip = if results.your_ip.contains('.') {
         // IPv4: 显示前三位，最后一位用***代替
         let parts: Vec<&str> = results.your_ip.split('.').collect();
         if parts.len() == 4 {
@@ -291,11 +292,15 @@ impl SpeedTest {
         } else {
             "****:****:****".to_string()
         }
+    };
+    
     println!(
         "{:<20} {}",
         "Your IP:".bright_white(),
-        results.your_ip.bright_green()
+        masked_ip.bright_green()
     );
+    // ... rest of the method
+}
     
     println!(
         "{:<20} {:.2} {}",
@@ -388,21 +393,6 @@ impl SpeedTest {
     println!("  Packet Loss: {}", packet_loss_rating); // 新增
 }
 
-// 新增：丢包率评级方法
-fn get_packet_loss_rating(&self, packet_loss_pct: f64) -> String {
-    if packet_loss_pct <= 0.5 {
-        "Excellent".bright_green().to_string()
-    } else if packet_loss_pct <= 1.0 {
-        "Good".green().to_string()
-    } else if packet_loss_pct <= 2.0 {
-        "Fair".yellow().to_string()
-    } else if packet_loss_pct <= 5.0 {
-        "Poor".red().to_string()
-    } else {
-        "Very Poor".bright_red().to_string()
-    }
-}
-
     fn get_speed_rating(&self, mbps: f64) -> String {
         if mbps >= 100.0 {
             "Excellent".bright_green().to_string()
@@ -425,6 +415,21 @@ fn get_packet_loss_rating(&self, packet_loss_pct: f64) -> String {
         } else if ms <= 100.0 {
             "Fair".yellow().to_string()
         } else if ms <= 200.0 {
+            "Poor".red().to_string()
+        } else {
+            "Very Poor".bright_red().to_string()
+        }
+    }
+
+    // 新增：丢包率评级方法
+    fn get_packet_loss_rating(&self, packet_loss_pct: f64) -> String {
+        if packet_loss_pct <= 0.5 {
+            "Excellent".bright_green().to_string()
+        } else if packet_loss_pct <= 1.0 {
+            "Good".green().to_string()
+        } else if packet_loss_pct <= 2.0 {
+            "Fair".yellow().to_string()
+        } else if packet_loss_pct <= 5.0 {
             "Poor".red().to_string()
         } else {
             "Very Poor".bright_red().to_string()
