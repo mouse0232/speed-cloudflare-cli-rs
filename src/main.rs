@@ -7,6 +7,7 @@ use rand::Rng;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
@@ -18,7 +19,7 @@ struct SpeedTestConfig {
     download_bytes: Vec<usize>,
     upload_bytes: Vec<usize>,
     latency_tests: usize,
-    ip_version: IpVersion, // 新增字段
+    ip_version: IpVersion,
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +35,20 @@ impl Default for SpeedTestConfig {
             download_bytes: vec![100_000, 1_000_000, 10_000_000, 25_000_000, 100_000_000],
             upload_bytes: vec![1_000, 10_000, 100_000, 1_000_000, 10_000_000, 25_000_000],
             latency_tests: 20,
-            ip_version: IpVersion::Auto, // 默认自动选择
+            ip_version: IpVersion::Auto,
+        }
+    }
+}
+
+impl FromStr for IpVersion {
+    type Err = ();
+    
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "4" => Ok(IpVersion::V4),
+            "6" => Ok(IpVersion::V6),
+            "auto" => Ok(IpVersion::Auto),
+            _ => Err(()),
         }
     }
 }
@@ -81,9 +95,6 @@ impl SpeedTest {
         
         Self { client, config }
     }
-    
-    // ... 其他方法保持不变
-}
 
     async fn run(&self) -> Result<SpeedTestResults> {
         println!("{}", "Starting Cloudflare Speed Test...".bright_cyan());
@@ -195,7 +206,6 @@ impl SpeedTest {
         Ok(speeds)
     }
 
-
     async fn measure_upload(&self) -> Result<f64> {
         println!("{}", "Measuring upload speed...".yellow());
         let pb = ProgressBar::new(self.config.upload_bytes.len() as u64);
@@ -233,7 +243,7 @@ impl SpeedTest {
 
     fn generate_random_data(&self, size: usize) -> Bytes {
         let mut rng = rand::thread_rng();
-        let data: Vec<u8> = (0..size).map(|_| rng.r#gen::<u8>()).collect();
+        let data: Vec<u8> = (0..size).map(|_| rng.gen::<u8>()).collect();
         Bytes::from(data)
     }
 
@@ -447,20 +457,4 @@ async fn main() -> Result<()> {
     }
     
     Ok(())
-}
-
-use std::str::FromStr;
-
-// 在IpVersion枚举上方添加
-impl FromStr for IpVersion {
-    type Err = ();
-    
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "4" => Ok(IpVersion::V4),
-            "6" => Ok(IpVersion::V6),
-            "auto" => Ok(IpVersion::Auto),
-            _ => Err(()),
-        }
-    }
 }
