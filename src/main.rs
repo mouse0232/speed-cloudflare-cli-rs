@@ -299,8 +299,6 @@ impl SpeedTest {
         "Your IP:".bright_white(),
         masked_ip.bright_green()
     );
-    // ... rest of the method
-}
     
     println!(
         "{:<20} {:.2} {}",
@@ -317,70 +315,69 @@ impl SpeedTest {
         "%".bright_red()
     );
     
-        
-        if results.speed_100kb > 0.0 {
-            println!(
-                "{:<20} {:.2} {}",
-                "100kB speed:".bright_white(),
-                results.speed_100kb,
-                "Mbps".bright_cyan()
-            );
-        }
-        
-        if results.speed_1mb > 0.0 {
-            println!(
-                "{:<20} {:.2} {}",
-                "1MB speed:".bright_white(),
-                results.speed_1mb,
-                "Mbps".bright_cyan()
-            );
-        }
-        
-        if results.speed_10mb > 0.0 {
-            println!(
-                "{:<20} {:.2} {}",
-                "10MB speed:".bright_white(),
-                results.speed_10mb,
-                "Mbps".bright_cyan()
-            );
-        }
-        
-        if results.speed_25mb > 0.0 {
-            println!(
-                "{:<20} {:.2} {}",
-                "25MB speed:".bright_white(),
-                results.speed_25mb,
-                "Mbps".bright_cyan()
-            );
-        }
-        
-        if results.speed_100mb > 0.0 {
-            println!(
-                "{:<20} {:.2} {}",
-                "100MB speed:".bright_white(),
-                results.speed_100mb,
-                "Mbps".bright_cyan()
-            );
-        }
-        
+    if results.speed_100kb > 0.0 {
         println!(
             "{:<20} {:.2} {}",
-            "Download speed:".bright_white(),
-            results.download_mbps,
-            "Mbps".bright_green()
+            "100kB speed:".bright_white(),
+            results.speed_100kb,
+            "Mbps".bright_cyan()
         );
-        
-        println!(
-            "{:<20} {:.2} {}",
-            "Upload speed:".bright_white(),
-            results.upload_mbps,
-            "Mbps".bright_green()
-        );
-        
-        println!("{}", "═".repeat(60).bright_cyan());
-        
-        self.display_quality_rating(results);
     }
+    
+    if results.speed_1mb > 0.0 {
+        println!(
+            "{:<20} {:.2} {}",
+            "1MB speed:".bright_white(),
+            results.speed_1mb,
+            "Mbps".bright_cyan()
+        );
+    }
+    
+    if results.speed_10mb > 0.0 {
+        println!(
+            "{:<20} {:.2} {}",
+            "10MB speed:".bright_white(),
+            results.speed_10mb,
+            "Mbps".bright_cyan()
+        );
+    }
+    
+    if results.speed_25mb > 0.0 {
+        println!(
+            "{:<20} {:.2} {}",
+            "25MB speed:".bright_white(),
+            results.speed_25mb,
+            "Mbps".bright_cyan()
+        );
+    }
+    
+    if results.speed_100mb > 0.0 {
+        println!(
+            "{:<20} {:.2} {}",
+            "100MB speed:".bright_white(),
+            results.speed_100mb,
+            "Mbps".bright_cyan()
+        );
+    }
+    
+    println!(
+        "{:<20} {:.2} {}",
+        "Download speed:".bright_white(),
+        results.download_mbps,
+        "Mbps".bright_green()
+    );
+    
+    println!(
+        "{:<20} {:.2} {}",
+        "Upload speed:".bright_white(),
+        results.upload_mbps,
+        "Mbps".bright_green()
+    );
+    
+    println!("{}", "═".repeat(60).bright_cyan());
+    
+    self.display_quality_rating(results);
+}
 
     fn display_quality_rating(&self, results: &SpeedTestResults) {
     let download_rating = self.get_speed_rating(results.download_mbps);
