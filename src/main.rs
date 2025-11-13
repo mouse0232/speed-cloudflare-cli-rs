@@ -274,7 +274,23 @@ impl SpeedTest {
         "Server location:".bright_white(),
         results.server_location.bright_green()
     );
-    
+    // 只显示部分IP信息
+    let partial_ip = if results.your_ip.contains('.') {
+        // IPv4: 显示前三位，最后一位用***代替
+        let parts: Vec<&str> = results.your_ip.split('.').collect();
+        if parts.len() == 4 {
+            format!("{}.{}.{}.***", parts[0], parts[1], parts[2])
+        } else {
+            "***.***.***.***".to_string()
+        }
+    } else {
+        // IPv6: 显示前两段，其余用****代替
+        let parts: Vec<&str> = results.your_ip.split(':').collect();
+        if parts.len() > 2 {
+            format!("{}:{}:****", parts[0], parts[1])
+        } else {
+            "****:****:****".to_string()
+        }
     println!(
         "{:<20} {}",
         "Your IP:".bright_white(),
