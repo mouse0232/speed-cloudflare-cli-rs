@@ -84,7 +84,7 @@ impl SpeedTest {
                 client_builder = client_builder.local_address(Some("0.0.0.0".parse().unwrap()));
             },
             IpVersion::V6 => {
-                client_builder = client_builder.local_address_v6(Some("::".parse().unwrap()));
+                client_builder = client_builder.local_address(Some("::".parse().unwrap()));
             },
             IpVersion::Auto => {
                 // 使用默认行为，不特别指定IP版本
@@ -243,7 +243,7 @@ impl SpeedTest {
 
     fn generate_random_data(&self, size: usize) -> Bytes {
         let mut rng = rand::thread_rng();
-        let data: Vec<u8> = (0..size).map(|_| rng.gen::<u8>()).collect();
+        let data: Vec<u8> = (0..size).map(|_| rng.r#gen::<u8>()).collect(); // 修复关键字问题
         Bytes::from(data)
     }
 
