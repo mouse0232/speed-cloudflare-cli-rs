@@ -439,7 +439,7 @@ impl SpeedTest {
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")?
             .progress_chars("#>-"));
 
-        let mut successful = 0;
+        let mut _successful = 0;
         let mut failed = 0;
         
         for _ in 0..self.config.packet_loss_tests {
@@ -451,7 +451,7 @@ impl SpeedTest {
             
             match result {
                 Ok(response) if response.status().is_success() => {
-                    successful += 1;
+                    _successful += 1;
                 }
                 _ => {
                     failed += 1;
