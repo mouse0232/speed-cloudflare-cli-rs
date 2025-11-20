@@ -63,23 +63,52 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build universal Linux binary
+      - name: Build universal Linux binary (x86_64)
         run: |
           cargo build --target x86_64-unknown-linux-gnu --release
 
-      - name: Prepare artifact
-        id: artifact_name
+      - name: Prepare artifact (x86_64)
+        id: artifact_name_x86_64
         run: |
-          ARTIFACT="speed-cloudflare-cli-linux-universal"
+          ARTIFACT="speed-cloudflare-cli-linux-x86_64"
           cp target/x86_64-unknown-linux-gnu/release/speed-cloudflare-cli $ARTIFACT
           chmod +x $ARTIFACT
-          echo "artifact=$ARTIFACT" >> $GITHUB_OUTPUT
+          echo "artifact_x86_64=$ARTIFACT" >> $GITHUB_OUTPUT
 
-      - name: Upload artifact
+      - name: Upload artifact (x86_64)
         uses: actions/upload-artifact@v4
         with:
-          name: speed-cloudflare-cli-linux-universal
-          path: ${{ steps.artifact_name.outputs.artifact }}
+          name: speed-cloudflare-cli-linux-x86_64
+          path: ${{ steps.artifact_name_x86_64.outputs.artifact_x86_64 }}
+
+  # Universal ARM Linux binary
+  build-universal-linux-arm:
+    name: Build universal ARM Linux binary
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build universal Linux binary (ARM)
+        run: |
+          cargo build --target aarch64-unknown-linux-gnu --release
+
+      - name: Prepare artifact (ARM)
+        id: artifact_name_arm
+        run: |
+          ARTIFACT="speed-cloudflare-cli-linux-arm64"
+          cp target/aarch64-unknown-linux-gnu/release/speed-cloudflare-cli $ARTIFACT
+          chmod +x $ARTIFACT
+          echo "artifact_arm=$ARTIFACT" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact (ARM)
+        uses: actions/upload-artifact@v4
+        with:
+          name: speed-cloudflare-cli-linux-arm64
+          path: ${{ steps.artifact_name_arm.outputs.artifact_arm }}
 
   deb:
     name: Build .deb package on ${{ matrix.os }}
@@ -119,7 +148,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build, build-universal-linux, deb]
+    needs: [build, build-universal-linux, build-universal-linux-arm, deb]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
