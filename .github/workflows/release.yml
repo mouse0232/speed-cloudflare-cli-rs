@@ -52,6 +52,35 @@ jobs:
           name: speed-cloudflare-cli-${{ matrix.os }}
           path: ${{ steps.artifact_name_win.outputs.artifact || steps.artifact_name_unix.outputs.artifact }}
 
+  # Universal Linux binary that works on most distributions
+  build-universal-linux:
+    name: Build universal Linux binary
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build universal Linux binary
+        run: |
+          cargo build --target x86_64-unknown-linux-gnu --release
+
+      - name: Prepare artifact
+        id: artifact_name
+        run: |
+          ARTIFACT="speed-cloudflare-cli-linux-universal"
+          cp target/x86_64-unknown-linux-gnu/release/speed-cloudflare-cli $ARTIFACT
+          chmod +x $ARTIFACT
+          echo "artifact=$ARTIFACT" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: speed-cloudflare-cli-linux-universal
+          path: ${{ steps.artifact_name.outputs.artifact }}
+
   deb:
     name: Build .deb package on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -90,7 +119,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build, deb]
+    needs: [build, build-universal-linux, deb]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -103,4 +132,4 @@ jobs:
         with:
           files: ./artifacts/**/speed-cloudflare-cli*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
