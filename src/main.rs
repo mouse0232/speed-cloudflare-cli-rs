@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use clap::{Arg, Command};
 use colored::*;
@@ -46,7 +46,7 @@ impl Default for SpeedTestConfig {
 
 impl FromStr for IpVersion {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "4" => Ok(IpVersion::V4),
@@ -80,38 +80,42 @@ struct SpeedTest {
 
 impl SpeedTest {
     fn new(config: SpeedTestConfig) -> Result<Self> {
-        let mut client_builder = Client::builder()
-            .timeout(Duration::from_secs(30));
-        
+        let mut client_builder = Client::builder().timeout(Duration::from_secs(30));
+
         match config.ip_version {
             IpVersion::V4 => {
-                client_builder = client_builder.local_address(Some("0.0.0.0".parse().context("Failed to parse IPv4 address")?));
-            },
+                client_builder = client_builder.local_address(Some(
+                    "0.0.0.0".parse().context("Failed to parse IPv4 address")?,
+                ));
+            }
             IpVersion::V6 => {
-                client_builder = client_builder.local_address(Some("::".parse().context("Failed to parse IPv6 address")?));
-            },
+                client_builder = client_builder
+                    .local_address(Some("::".parse().context("Failed to parse IPv6 address")?));
+            }
             IpVersion::Auto => {
                 // Use default behavior
             }
         }
-        
-        let client = client_builder.build().context("Failed to build HTTP client")?;
-        
+
+        let client = client_builder
+            .build()
+            .context("Failed to build HTTP client")?;
+
         Ok(Self { client, config })
     }
 
     async fn run(&self) -> Result<SpeedTestResults> {
         println!("{}", "Starting Cloudflare Speed Test...".bright_cyan());
-        
+
         let server_info = self.get_server_info().await?;
         let latency_results = self.measure_latency().await?;
         let packet_loss_pct = self.measure_packet_loss().await?;
         let download_speeds = self.measure_download_detailed().await?;
         let upload_speed = self.measure_upload().await?;
-        
+
         let latency_ms = latency_results.iter().sum::<f64>() / latency_results.len() as f64;
         let jitter_ms = self.calculate_jitter(&latency_results);
-        
+
         Ok(SpeedTestResults {
             server_location: server_info.0,
             your_ip: server_info.1,
@@ -122,7 +126,9 @@ impl SpeedTest {
             speed_10mb: *download_speeds.get(&10_000_000).unwrap_or(&0.0),
             speed_25mb: *download_speeds.get(&25_000_000).unwrap_or(&0.0),
             speed_100mb: *download_speeds.get(&100_000_000).unwrap_or(&0.0),
-            download_mbps: download_speeds.values().fold(f64::NEG_INFINITY, |a, &b| a.max(b)),
+            download_mbps: download_speeds
+                .values()
+                .fold(f64::NEG_INFINITY, |a, &b| a.max(b)),
             upload_mbps: upload_speed,
             jitter_ms,
         })
@@ -131,46 +137,55 @@ impl SpeedTest {
     async fn measure_latency(&self) -> Result<Vec<f64>> {
         println!("{}", "Measuring latency...".yellow());
         let pb = ProgressBar::new(self.config.latency_tests as u64);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
 
         let mut latencies = Vec::new();
-        
+
         for _ in 0..self.config.latency_tests {
             let start = Instant::now();
-            let response = self.client
+            let response = self
+                .client
                 .get(CLOUDFLARE_DOWNLOAD_URL)
                 .query(&[("bytes", "1")])
                 .send()
                 .await
                 .context("Failed to send latency test request")?;
-            
+
             if response.status().is_success() {
                 let latency = start.elapsed().as_millis() as f64;
                 latencies.push(latency);
             }
-            
+
             pb.inc(1);
             sleep(Duration::from_millis(50)).await;
         }
-        
+
         pb.finish_with_message("Latency measurement complete");
         Ok(latencies)
     }
 
     async fn get_server_info(&self) -> Result<(String, String)> {
-        let response = self.client
+        let response = self
+            .client
             .get("https://www.cloudflare.com/cdn-cgi/trace")
             .send()
             .await
             .context("Failed to get server info")?;
-        
-        let text = response.text().await.context("Failed to read server info response")?;
+
+        let text = response
+            .text()
+            .await
+            .context("Failed to read server info response")?;
         let mut server_location = "Unknown".to_string();
         let mut your_ip = "Unknown".to_string();
-        
+
         for line in text.lines() {
             if let Some((key, value)) = line.split_once('=') {
                 match key {
@@ -180,44 +195,52 @@ impl SpeedTest {
                 }
             }
         }
-        
+
         Ok((server_location, your_ip))
     }
 
     async fn measure_download_detailed(&self) -> Result<HashMap<usize, f64>> {
         println!("{}", "Measuring download speed...".yellow());
         let pb = ProgressBar::new(self.config.download_bytes.len() as u64);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
 
         let mut speeds = HashMap::new();
-        
+
         if self.config.single_threaded {
             // Sequential download for single-threaded mode (single connection speed test)
             for &bytes in &self.config.download_bytes {
                 let start = Instant::now();
-                let response = self.client
+                let response = self
+                    .client
                     .get(CLOUDFLARE_DOWNLOAD_URL)
                     .query(&[("bytes", bytes.to_string())])
                     .send()
                     .await
                     .context("Failed to send download test request")?;
-                
+
                 if response.status().is_success() {
-                    let _content = response.bytes().await.context("Failed to read download response")?;
+                    let _content = response
+                        .bytes()
+                        .await
+                        .context("Failed to read download response")?;
                     let duration = start.elapsed();
                     let mbps = (bytes as f64 * 8.0) / (duration.as_secs_f64() * 1_000_000.0);
                     speeds.insert(bytes, mbps);
                 }
-                
+
                 pb.inc(1);
             }
         } else {
             // Parallel download for multi-threaded mode (multi-connection speed test)
             let mut download_futures = Vec::new();
-            
+
             for &bytes in &self.config.download_bytes {
                 let client = self.client.clone();
                 let pb_clone = pb.clone();
@@ -229,21 +252,27 @@ impl SpeedTest {
                         .send()
                         .await
                         .context("Failed to send download test request")?;
-                    
+
                     if response.status().is_success() {
-                        let _content = response.bytes().await.context("Failed to read download response")?;
+                        let _content = response
+                            .bytes()
+                            .await
+                            .context("Failed to read download response")?;
                         let duration = start.elapsed();
                         let mbps = (bytes as f64 * 8.0) / (duration.as_secs_f64() * 1_000_000.0);
                         Ok((bytes, mbps, pb_clone))
                     } else {
-                        Err(anyhow::anyhow!("Download request failed with status: {}", response.status()))
+                        Err(anyhow::anyhow!(
+                            "Download request failed with status: {}",
+                            response.status()
+                        ))
                     }
                 });
                 download_futures.push(future);
             }
-            
+
             let results = futures::future::join_all(download_futures).await;
-            
+
             for result in results {
                 match result {
                     Ok(Ok((bytes, mbps, pb_clone))) => {
@@ -261,7 +290,7 @@ impl SpeedTest {
                 }
             }
         }
-        
+
         pb.finish_with_message("Download speed measurement complete");
         Ok(speeds)
     }
@@ -269,66 +298,74 @@ impl SpeedTest {
     async fn measure_upload(&self) -> Result<f64> {
         println!("{}", "Measuring upload speed...".yellow());
         let pb = ProgressBar::new(self.config.upload_bytes.len() as u64);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
 
         let mut speeds = Vec::new();
-        
+
         if self.config.single_threaded {
             // Sequential upload for single-threaded mode (single connection speed test)
             for &bytes in &self.config.upload_bytes {
                 let data = self.generate_random_data(bytes);
                 let start = Instant::now();
-                
-                let response = self.client
+
+                let response = self
+                    .client
                     .post(CLOUDFLARE_UPLOAD_URL)
                     .body(data)
                     .send()
                     .await
                     .context("Failed to send upload test request")?;
-                
+
                 if response.status().is_success() {
                     let duration = start.elapsed();
                     let mbps = (bytes as f64 * 8.0) / (duration.as_secs_f64() * 1_000_000.0);
                     speeds.push(mbps);
                 }
-                
+
                 pb.inc(1);
             }
         } else {
             // Parallel upload for multi-threaded mode (multi-connection speed test)
             let mut upload_futures = Vec::new();
-            
+
             for &bytes in &self.config.upload_bytes {
                 let client = self.client.clone();
                 let data = self.generate_random_data(bytes);
                 let pb_clone = pb.clone();
                 let future = tokio::spawn(async move {
                     let start = Instant::now();
-                    
+
                     let response = client
                         .post(CLOUDFLARE_UPLOAD_URL)
                         .body(data)
                         .send()
                         .await
                         .context("Failed to send upload test request")?;
-                    
+
                     let duration = start.elapsed();
-                    
+
                     if response.status().is_success() {
                         let mbps = (bytes as f64 * 8.0) / (duration.as_secs_f64() * 1_000_000.0);
                         Ok((mbps, pb_clone))
                     } else {
-                        Err(anyhow::anyhow!("Upload request failed with status: {}", response.status()))
+                        Err(anyhow::anyhow!(
+                            "Upload request failed with status: {}",
+                            response.status()
+                        ))
                     }
                 });
                 upload_futures.push(future);
             }
-            
+
             let results = futures::future::join_all(upload_futures).await;
-            
+
             for result in results {
                 match result {
                     Ok(Ok((mbps, pb_clone))) => {
@@ -346,13 +383,13 @@ impl SpeedTest {
                 }
             }
         }
-        
+
         pb.finish_with_message("Upload speed measurement complete");
-        
+
         if speeds.is_empty() {
             return Ok(0.0);
         }
-        
+
         speeds.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let p90_index = (speeds.len() as f64 * 0.9) as usize;
         Ok(speeds.get(p90_index).copied().unwrap_or(0.0))
@@ -370,25 +407,29 @@ impl SpeedTest {
         if latencies.len() < 2 {
             return 0.0;
         }
-        
+
         let mean = latencies.iter().sum::<f64>() / latencies.len() as f64;
-        let variance = latencies.iter()
-            .map(|&x| (x - mean).powi(2))
-            .sum::<f64>() / latencies.len() as f64;
+        let variance =
+            latencies.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / latencies.len() as f64;
         variance.sqrt()
     }
 
     fn display_results(&self, results: &SpeedTestResults) {
         println!("\n{}", "═".repeat(60).bright_cyan());
-        println!("{}", "           CLOUDFLARE SPEED TEST RESULTS".bright_cyan().bold());
+        println!(
+            "{}",
+            "           CLOUDFLARE SPEED TEST RESULTS"
+                .bright_cyan()
+                .bold()
+        );
         println!("{}", "═".repeat(60).bright_cyan());
-        
+
         println!(
             "{:<20} {}",
             "Server location:".bright_white(),
             results.server_location.bright_green()
         );
-        
+
         let masked_ip = if results.your_ip.contains('.') {
             let parts: Vec<&str> = results.your_ip.split('.').collect();
             if parts.len() == 4 {
@@ -404,27 +445,27 @@ impl SpeedTest {
                 "****:****:****".to_string()
             }
         };
-        
+
         println!(
             "{:<20} {}",
             "Your IP:".bright_white(),
             masked_ip.bright_green()
         );
-        
+
         println!(
             "{:<20} {:.2} {}",
             "Latency:".bright_white(),
             results.latency_ms,
             "ms".bright_yellow()
         );
-        
+
         println!(
             "{:<20} {:.2} {}",
             "Packet Loss:".bright_white(),
             results.packet_loss_pct,
             "%".bright_red()
         );
-        
+
         if results.speed_100kb > 0.0 {
             println!(
                 "{:<20} {:.2} {}",
@@ -433,7 +474,7 @@ impl SpeedTest {
                 "Mbps".bright_cyan()
             );
         }
-        
+
         if results.speed_1mb > 0.0 {
             println!(
                 "{:<20} {:.2} {}",
@@ -442,7 +483,7 @@ impl SpeedTest {
                 "Mbps".bright_cyan()
             );
         }
-        
+
         if results.speed_10mb > 0.0 {
             println!(
                 "{:<20} {:.2} {}",
@@ -451,7 +492,7 @@ impl SpeedTest {
                 "Mbps".bright_cyan()
             );
         }
-        
+
         if results.speed_25mb > 0.0 {
             println!(
                 "{:<20} {:.2} {}",
@@ -460,7 +501,7 @@ impl SpeedTest {
                 "Mbps".bright_cyan()
             );
         }
-        
+
         if results.speed_100mb > 0.0 {
             println!(
                 "{:<20} {:.2} {}",
@@ -469,23 +510,23 @@ impl SpeedTest {
                 "Mbps".bright_cyan()
             );
         }
-        
+
         println!(
             "{:<20} {:.2} {}",
             "Download speed:".bright_white(),
             results.download_mbps,
             "Mbps".bright_green()
         );
-        
+
         println!(
             "{:<20} {:.2} {}",
             "Upload speed:".bright_white(),
             results.upload_mbps,
             "Mbps".bright_green()
         );
-        
+
         println!("{}", "═".repeat(60).bright_cyan());
-        
+
         self.display_quality_rating(results);
     }
 
@@ -493,7 +534,7 @@ impl SpeedTest {
         let download_rating = self.get_speed_rating(results.download_mbps);
         let latency_rating = self.get_latency_rating(results.latency_ms);
         let packet_loss_rating = self.get_packet_loss_rating(results.packet_loss_pct);
-        
+
         println!("\n{}", "Connection Quality:".bright_white().bold());
         println!("  Download:  {}", download_rating);
         println!("  Latency:   {}", latency_rating);
@@ -545,20 +586,25 @@ impl SpeedTest {
     async fn measure_packet_loss(&self) -> Result<f64> {
         println!("{}", "Measuring packet loss...".yellow());
         let pb = ProgressBar::new(self.config.packet_loss_tests as u64);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
 
         let mut failed = 0;
-        
+
         for _ in 0..self.config.packet_loss_tests {
-            let result = self.client
+            let result = self
+                .client
                 .get(CLOUDFLARE_DOWNLOAD_URL)
                 .query(&[("bytes", "1")])
                 .send()
                 .await;
-            
+
             match result {
                 Ok(response) if response.status().is_success() => {
                     // Successfully received response
@@ -567,13 +613,13 @@ impl SpeedTest {
                     failed += 1;
                 }
             }
-            
+
             pb.inc(1);
             sleep(Duration::from_millis(20)).await;
         }
-        
+
         pb.finish_with_message("Packet loss measurement complete");
-        
+
         let packet_loss_pct = (failed as f64 / self.config.packet_loss_tests as f64) * 100.0;
         Ok(packet_loss_pct)
     }
@@ -591,14 +637,14 @@ async fn main() -> Result<()> {
                 .long("count")
                 .value_name("COUNT")
                 .help("Number of test runs")
-                .default_value("1")
+                .default_value("1"),
         )
         .arg(
             Arg::new("json")
                 .short('j')
                 .long("json")
                 .help("Output results in JSON format")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("ip_version")
@@ -606,52 +652,53 @@ async fn main() -> Result<()> {
                 .long("ip-version")
                 .value_name("VERSION")
                 .help("IP version to use (4 for IPv4, 6 for IPv6, auto for automatic)")
-                .default_value("auto")
+                .default_value("auto"),
         )
         .arg(
             Arg::new("single_threaded")
                 .long("single-threaded")
                 .help("Run speed test in single-threaded mode")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("sequential_download")
                 .long("sequential-download")
                 .help("Use sequential download instead of parallel download")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("sequential_upload")
                 .long("sequential-upload")
                 .help("Use sequential upload instead of parallel upload")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
         .get_matches();
 
-    let count: usize = matches.get_one::<String>("count")
+    let count: usize = matches
+        .get_one::<String>("count")
         .unwrap()
         .parse()
         .context("Failed to parse count value")?;
-    
+
     let json_output = matches.get_flag("json");
     let single_threaded = matches.get_flag("single_threaded");
     let _sequential_download = matches.get_flag("sequential_download");
     let _sequential_upload = matches.get_flag("sequential_upload");
-    
+
     let ip_version_str = matches.get_one::<String>("ip_version").unwrap();
     let ip_version = IpVersion::from_str(ip_version_str).unwrap_or_else(|_| {
         eprintln!("Invalid IP version. Use 4, 6, or auto.");
         std::process::exit(1);
     });
-    
+
     let config = SpeedTestConfig {
         ip_version,
         single_threaded,
         ..Default::default()
     };
-    
+
     let speed_test = SpeedTest::new(config)?;
-    
+
     // Handle both modes in the same async context
     if single_threaded {
         // For single-threaded mode, we indicate the preference but still run in the main async context
@@ -659,16 +706,23 @@ async fn main() -> Result<()> {
     } else {
         println!("{}", "Running in multi-threaded mode".yellow());
     }
-    
+
     for i in 1..=count {
         if count > 1 {
-            println!("\n{}", format!("Running test {} of {}", i, count).bright_yellow());
+            println!(
+                "\n{}",
+                format!("Running test {} of {}", i, count).bright_yellow()
+            );
         }
-        
+
         match speed_test.run().await {
             Ok(results) => {
                 if json_output {
-                    println!("{}", serde_json::to_string_pretty(&results).context("Failed to serialize results")?);
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&results)
+                            .context("Failed to serialize results")?
+                    );
                 } else {
                     speed_test.display_results(&results);
                 }
@@ -679,6 +733,6 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
